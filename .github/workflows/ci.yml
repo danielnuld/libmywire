@@ -1,0 +1,116 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-gcc,   os: ubuntu-latest,  cc: gcc }
+          - { name: linux-clang, os: ubuntu-latest,  cc: clang }
+          - { name: linux-strict-c11, os: ubuntu-latest, cc: gcc, strict: true }
+          - { name: macos,       os: macos-latest,   cc: clang }
+          - { name: windows-msvc, os: windows-latest }
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        shell: bash
+        run: |
+          args="-DMW_WERROR=ON -DCMAKE_BUILD_TYPE=Debug"
+          [ -n "${{ matrix.cc }}" ] && args="$args -DCMAKE_C_COMPILER=${{ matrix.cc }}"
+          # Squaero builds its dependencies as -std=c11 without GNU extensions.
+          [ "${{ matrix.strict }}" = "true" ] && args="$args -DCMAKE_C_EXTENSIONS=OFF"
+          [ "${{ runner.os }}" = "macOS" ] && args="$args -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            choco install openssl --no-progress -y >/dev/null
+            args="$args -DOPENSSL_ROOT_DIR='C:/Program Files/OpenSSL'"
+          fi
+          eval cmake -S . -B build $args
+      - name: Build
+        run: cmake --build build --config Debug
+      - name: Test
+        run: ctest --test-dir build -C Debug --output-on-failure
+
+  mingw:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: mingw-x64, sys: MINGW64, env: x86_64 }
+          - { name: mingw-x86, sys: MINGW32, env: i686 }
+    name: ${{ matrix.name }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.sys }}
+          install: >-
+            mingw-w64-${{ matrix.env }}-gcc
+            mingw-w64-${{ matrix.env }}-cmake
+            mingw-w64-${{ matrix.env }}-ninja
+            mingw-w64-${{ matrix.env }}-openssl
+      - run: cmake -S . -B build -G Ninja -DMW_WERROR=ON
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure
+
+  # Against real servers, under ASan and UBSan: MySQL 8.4 (caching_sha2_password,
+  # its RSA and TLS paths, a native user switched to, CA verification) and
+  # MariaDB 11 (mysql_native_password, TLS).
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Servers
+        run: |
+          docker run -d --name my84 -p 23306:3306 -e MYSQL_ROOT_PASSWORD=test123 \
+            -e MYSQL_DATABASE=test mysql:8.4 --mysql-native-password=ON
+          docker run -d --name maria -p 23307:3306 -e MARIADB_ROOT_PASSWORD=test123 \
+            -e MARIADB_DATABASE=test mariadb:11
+          for i in $(seq 60); do
+            docker exec my84 mysql -uroot -ptest123 -e 'select 1' >/dev/null 2>&1 &&
+            docker exec maria mariadb -uroot -ptest123 -e 'select 1' >/dev/null 2>&1 && break
+            sleep 2
+          done
+          docker exec my84 mysql -uroot -ptest123 -e "
+            CREATE USER 'sha2'@'%' IDENTIFIED WITH caching_sha2_password BY 'Sha2pass!';
+            GRANT ALL ON test.* TO 'sha2'@'%';
+            CREATE USER 'nat'@'%' IDENTIFIED WITH mysql_native_password BY 'natpass';
+            GRANT ALL ON *.* TO 'nat'@'%';"
+          docker cp my84:/var/lib/mysql/ca.pem /tmp/ca.pem
+      - name: Build with sanitizers
+        run: |
+          cmake -S . -B build -DMW_WERROR=ON -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all"
+          cmake --build build
+      - name: MySQL 8.4
+        env:
+          MW_TEST_HOST: 127.0.0.1
+          MW_TEST_PORT: 23306
+          MW_TEST_PASSWORD: test123
+          MW_TEST_SHA2_USER: sha2
+          MW_TEST_SHA2_PASSWORD: Sha2pass!
+          MW_TEST_TLS: 1
+          MW_TEST_CA: /tmp/ca.pem
+        run: ./build/test_live
+      - name: MySQL 8.4, a mysql_native_password user
+        env:
+          MW_TEST_HOST: 127.0.0.1
+          MW_TEST_PORT: 23306
+          MW_TEST_USER: nat
+          MW_TEST_PASSWORD: natpass
+          MW_TEST_TLS: 1
+        run: ./build/test_live
+      - name: MariaDB 11
+        env:
+          MW_TEST_HOST: 127.0.0.1
+          MW_TEST_PORT: 23307
+          MW_TEST_PASSWORD: test123
+          MW_TEST_TLS: 1
+        run: ./build/test_live
