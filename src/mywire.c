@@ -244,7 +244,7 @@ static int write_packet(mw_conn *c, const uint8_t *p, size_t n)
 static int write_buf(mw_conn *c, mw_buf *b)
 {
     int rc = b->oom ? fail(c, "out of memory") : write_packet(c, b->p, b->n);
-    buf_free(b);
+    mw_buf_free(b);
     return rc;
 }
 
@@ -379,20 +379,20 @@ static int login(mw_conn *c, const mw_handshake *h, uint32_t caps, const mw_opti
     memcpy(nonce, h->nonce, 20);
     n = auth_data(plugin, pw, nonce, data);
 
-    buf_le32(&b, caps);
-    buf_le32(&b, MW_MAX_PACKET);
-    buf_u8(&b, MW_CHARSET_UTF8MB4);
-    buf_put(&b, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 23);
-    buf_put(&b, o->user, strlen(o->user) + 1);
+    mw_buf_le32(&b, caps);
+    mw_buf_le32(&b, MW_MAX_PACKET);
+    mw_buf_u8(&b, MW_CHARSET_UTF8MB4);
+    mw_buf_put(&b, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 23);
+    mw_buf_put(&b, o->user, strlen(o->user) + 1);
     if (caps & CLIENT_PLUGIN_AUTH_LENENC_CLIENT_DATA)
-        buf_lenenc(&b, (uint64_t)n);
+        mw_buf_lenenc(&b, (uint64_t)n);
     else
-        buf_u8(&b, (unsigned)n);
-    buf_put(&b, data, (size_t)n);
+        mw_buf_u8(&b, (unsigned)n);
+    mw_buf_put(&b, data, (size_t)n);
     if (caps & CLIENT_CONNECT_WITH_DB)
-        buf_put(&b, o->database, strlen(o->database) + 1);
+        mw_buf_put(&b, o->database, strlen(o->database) + 1);
     if (caps & CLIENT_PLUGIN_AUTH)
-        buf_put(&b, plugin, strlen(plugin) + 1);
+        mw_buf_put(&b, plugin, strlen(plugin) + 1);
     if (write_buf(c, &b) < 0)
         return -1;
 
@@ -415,9 +415,9 @@ static int login(mw_conn *c, const mw_handshake *h, uint32_t caps, const mw_opti
         if (p[0] == 0xFE) { /* AuthSwitchRequest: another plugin, a new nonce */
             mw_rd r = {p + 1, c->pkt.n - 1, 0};
             const uint8_t *nn;
-            if (!rd_cstr(&r, plugin, sizeof plugin))
+            if (!mw_rd_cstr(&r, plugin, sizeof plugin))
                 return fail(c, "the server asks for the pre-4.1 password protocol, not supported");
-            nn = rd_bytes(&r, 20);
+            nn = mw_rd_bytes(&r, 20);
             if (!nn)
                 return lose(c, "unreadable authentication switch");
             memcpy(nonce, nn, 20);
@@ -546,10 +546,10 @@ mw_conn *mw_connect(const mw_options *o, char *err, int errlen)
     if (o->tls != MW_TLS_OFF && (h.caps & CLIENT_SSL)) {
         mw_buf b = {0};
         caps |= CLIENT_SSL;
-        buf_le32(&b, caps); /* SSLRequest: the response's first 32 bytes */
-        buf_le32(&b, MW_MAX_PACKET);
-        buf_u8(&b, MW_CHARSET_UTF8MB4);
-        buf_put(&b, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 23);
+        mw_buf_le32(&b, caps); /* SSLRequest: the response's first 32 bytes */
+        mw_buf_le32(&b, MW_MAX_PACKET);
+        mw_buf_u8(&b, MW_CHARSET_UTF8MB4);
+        mw_buf_put(&b, "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0", 23);
         if (write_buf(c, &b) < 0 || tls_start(c, o) < 0)
             goto out;
     }
@@ -584,7 +584,7 @@ void mw_close(mw_conn *c)
 #ifdef _WIN32
     WSACleanup();
 #endif
-    buf_free(&c->pkt);
+    mw_buf_free(&c->pkt);
     free_opts(&c->o);
     free(c);
 }
@@ -633,7 +633,7 @@ static void result_free(mw_result *r)
     free(r->cols);
     free(r->off);
     free(r->len);
-    buf_free(&r->cells);
+    mw_buf_free(&r->cells);
     free(r);
 }
 
@@ -676,7 +676,7 @@ static int read_head(mw_conn *c, mw_result *r)
         rd.p = p;
         rd.n = c->pkt.n;
         rd.bad = 0;
-        n = rd_lenenc(&rd, NULL);
+        n = mw_rd_lenenc(&rd, NULL);
         if (rd.bad || n == 0 || n > 4096)
             return lose(c, "unreadable result header");
         r->ncols = (int)n;
@@ -747,8 +747,8 @@ int mw_query(mw_conn *c, const char *sql, size_t len, mw_result **out)
         return fail(c, "out of memory");
     r->c = c;
     c->seq = 0;
-    buf_u8(&b, 0x03); /* COM_QUERY */
-    buf_put(&b, sql, len);
+    mw_buf_u8(&b, 0x03); /* COM_QUERY */
+    mw_buf_put(&b, sql, len);
     if (write_buf(c, &b) < 0 || read_head(c, r) < 0) {
         result_free(r);
         return -1;
@@ -800,7 +800,7 @@ int mw_next(mw_result *r)
     r->cells.n = 0;
     for (i = 0; i < r->ncols; i++) {
         size_t n;
-        const uint8_t *s = rd_lenenc_str(&rd, &n);
+        const uint8_t *s = mw_rd_lenenc_str(&rd, &n);
         if (!s && !rd.bad) {
             r->off[i] = NOT_NULL;
             r->len[i] = 0;
@@ -808,8 +808,8 @@ int mw_next(mw_result *r)
         }
         r->off[i] = r->cells.n;
         r->len[i] = n;
-        buf_put(&r->cells, s, n);
-        buf_u8(&r->cells, 0);
+        mw_buf_put(&r->cells, s, n);
+        mw_buf_u8(&r->cells, 0);
     }
     if (rd.bad || r->cells.oom) {
         r->ended = 1;

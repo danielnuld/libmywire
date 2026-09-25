@@ -7,7 +7,7 @@
 
 /* ---- buffers -------------------------------------------------------- */
 
-void buf_put(mw_buf *b, const void *p, size_t n)
+void mw_buf_put(mw_buf *b, const void *p, size_t n)
 {
     if (b->oom || !n)
         return;
@@ -28,24 +28,24 @@ void buf_put(mw_buf *b, const void *p, size_t n)
     b->n += n;
 }
 
-void buf_u8(mw_buf *b, unsigned v)
+void mw_buf_u8(mw_buf *b, unsigned v)
 {
     uint8_t c = (uint8_t)v;
-    buf_put(b, &c, 1);
+    mw_buf_put(b, &c, 1);
 }
 
-void buf_le32(mw_buf *b, uint32_t v)
+void mw_buf_le32(mw_buf *b, uint32_t v)
 {
     uint8_t c[4] = {(uint8_t)v, (uint8_t)(v >> 8), (uint8_t)(v >> 16), (uint8_t)(v >> 24)};
-    buf_put(b, c, 4);
+    mw_buf_put(b, c, 4);
 }
 
-void buf_lenenc(mw_buf *b, uint64_t v)
+void mw_buf_lenenc(mw_buf *b, uint64_t v)
 {
     uint8_t c[9];
     int i, k;
     if (v < 251) {
-        buf_u8(b, (unsigned)v);
+        mw_buf_u8(b, (unsigned)v);
         return;
     }
     if (v < 0x10000) {
@@ -60,10 +60,10 @@ void buf_lenenc(mw_buf *b, uint64_t v)
     }
     for (i = 0; i < k; i++)
         c[1 + i] = (uint8_t)(v >> (8 * i));
-    buf_put(b, c, (size_t)k + 1);
+    mw_buf_put(b, c, (size_t)k + 1);
 }
 
-void buf_free(mw_buf *b)
+void mw_buf_free(mw_buf *b)
 {
     free(b->p);
     memset(b, 0, sizeof *b);
@@ -71,7 +71,7 @@ void buf_free(mw_buf *b)
 
 /* ---- reading -------------------------------------------------------- */
 
-const uint8_t *rd_bytes(mw_rd *r, size_t n)
+const uint8_t *mw_rd_bytes(mw_rd *r, size_t n)
 {
     const uint8_t *p;
     if (r->bad || r->n < n) {
@@ -84,9 +84,9 @@ const uint8_t *rd_bytes(mw_rd *r, size_t n)
     return p;
 }
 
-static uint64_t rd_le(mw_rd *r, int k)
+static uint64_t mw_rd_le(mw_rd *r, int k)
 {
-    const uint8_t *p = rd_bytes(r, (size_t)k);
+    const uint8_t *p = mw_rd_bytes(r, (size_t)k);
     uint64_t v = 0;
     int i;
     if (!p)
@@ -96,29 +96,29 @@ static uint64_t rd_le(mw_rd *r, int k)
     return v;
 }
 
-unsigned rd_u8(mw_rd *r) { return (unsigned)rd_le(r, 1); }
-unsigned rd_le16(mw_rd *r) { return (unsigned)rd_le(r, 2); }
-uint32_t rd_le32(mw_rd *r) { return (uint32_t)rd_le(r, 4); }
+unsigned mw_rd_u8(mw_rd *r) { return (unsigned)mw_rd_le(r, 1); }
+unsigned mw_rd_le16(mw_rd *r) { return (unsigned)mw_rd_le(r, 2); }
+uint32_t mw_rd_le32(mw_rd *r) { return (uint32_t)mw_rd_le(r, 4); }
 
-uint64_t rd_lenenc(mw_rd *r, int *is_null)
+uint64_t mw_rd_lenenc(mw_rd *r, int *is_null)
 {
-    unsigned c = rd_u8(r);
+    unsigned c = mw_rd_u8(r);
     if (is_null)
         *is_null = c == 0xFB;
     switch (c) {
     case 0xFB: return 0;
-    case 0xFC: return rd_le(r, 2);
-    case 0xFD: return rd_le(r, 3);
-    case 0xFE: return rd_le(r, 8);
+    case 0xFC: return mw_rd_le(r, 2);
+    case 0xFD: return mw_rd_le(r, 3);
+    case 0xFE: return mw_rd_le(r, 8);
     case 0xFF: r->bad = 1; return 0; /* never a length */
     default: return c;
     }
 }
 
-const uint8_t *rd_lenenc_str(mw_rd *r, size_t *len)
+const uint8_t *mw_rd_lenenc_str(mw_rd *r, size_t *len)
 {
     int is_null;
-    uint64_t n = rd_lenenc(r, &is_null);
+    uint64_t n = mw_rd_lenenc(r, &is_null);
     *len = 0;
     if (is_null || r->bad)
         return NULL;
@@ -127,10 +127,10 @@ const uint8_t *rd_lenenc_str(mw_rd *r, size_t *len)
         return NULL;
     }
     *len = (size_t)n;
-    return rd_bytes(r, (size_t)n);
+    return mw_rd_bytes(r, (size_t)n);
 }
 
-int rd_cstr(mw_rd *r, char *out, size_t cap)
+int mw_rd_cstr(mw_rd *r, char *out, size_t cap)
 {
     const uint8_t *z = r->bad ? NULL : (const uint8_t *)memchr(r->p, 0, r->n);
     size_t n, k;
@@ -142,7 +142,7 @@ int rd_cstr(mw_rd *r, char *out, size_t cap)
     k = n < cap - 1 ? n : cap - 1;
     memcpy(out, r->p, k);
     out[k] = 0;
-    rd_bytes(r, n + 1);
+    mw_rd_bytes(r, n + 1);
     return 1;
 }
 
@@ -163,13 +163,13 @@ int mw_parse_handshake(const uint8_t *p, size_t n, mw_handshake *h)
     mw_rd r = {p, n, 0};
     const uint8_t *part1;
     memset(h, 0, sizeof *h);
-    h->protocol = rd_u8(&r);
-    if (h->protocol != 10 || !rd_cstr(&r, h->version, sizeof h->version))
+    h->protocol = mw_rd_u8(&r);
+    if (h->protocol != 10 || !mw_rd_cstr(&r, h->version, sizeof h->version))
         return -1;
-    h->thread_id = rd_le32(&r);
-    part1 = rd_bytes(&r, 8);
-    rd_u8(&r); /* filler */
-    h->caps = rd_le16(&r);
+    h->thread_id = mw_rd_le32(&r);
+    part1 = mw_rd_bytes(&r, 8);
+    mw_rd_u8(&r); /* filler */
+    h->caps = mw_rd_le16(&r);
     if (r.bad || !part1)
         return -1;
     memcpy(h->nonce, part1, 8);
@@ -177,14 +177,14 @@ int mw_parse_handshake(const uint8_t *p, size_t n, mw_handshake *h)
         return 0; /* a pre-4.1 server: the caller refuses it for lacking PROTOCOL_41 */
     {
         unsigned authlen;
-        h->charset = rd_u8(&r);
-        h->status = rd_le16(&r);
-        h->caps |= (uint32_t)rd_le16(&r) << 16;
-        authlen = rd_u8(&r);
-        rd_bytes(&r, 10); /* reserved (MariaDB keeps extended capabilities here) */
+        h->charset = mw_rd_u8(&r);
+        h->status = mw_rd_le16(&r);
+        h->caps |= (uint32_t)mw_rd_le16(&r) << 16;
+        authlen = mw_rd_u8(&r);
+        mw_rd_bytes(&r, 10); /* reserved (MariaDB keeps extended capabilities here) */
         if (h->caps & CLIENT_SECURE_CONNECTION) {
             size_t k = authlen > 8 + 13 ? authlen - 8 : 13;
-            const uint8_t *part2 = rd_bytes(&r, k);
+            const uint8_t *part2 = mw_rd_bytes(&r, k);
             if (!part2)
                 return -1;
             memcpy(h->nonce + 8, part2, 12);
@@ -205,17 +205,17 @@ int mw_parse_ok(const uint8_t *p, size_t n, mw_ok *ok)
     mw_rd r = {p, n, 0};
     memset(ok, 0, sizeof *ok);
     if (mw_is_eof(p, n)) {
-        rd_u8(&r);
-        ok->warnings = rd_le16(&r);
-        ok->status = rd_le16(&r);
+        mw_rd_u8(&r);
+        ok->warnings = mw_rd_le16(&r);
+        ok->status = mw_rd_le16(&r);
         return r.bad ? -1 : 0;
     }
-    if (rd_u8(&r) != 0x00 && !(n && p[0] == 0xFE))
+    if (mw_rd_u8(&r) != 0x00 && !(n && p[0] == 0xFE))
         return -1;
-    ok->affected = rd_lenenc(&r, NULL);
-    ok->insert_id = rd_lenenc(&r, NULL);
-    ok->status = rd_le16(&r);
-    ok->warnings = rd_le16(&r);
+    ok->affected = mw_rd_lenenc(&r, NULL);
+    ok->insert_id = mw_rd_lenenc(&r, NULL);
+    ok->status = mw_rd_le16(&r);
+    ok->warnings = mw_rd_le16(&r);
     return r.bad ? -1 : 0;
 }
 
@@ -223,15 +223,15 @@ int mw_parse_err(const uint8_t *p, size_t n, mw_err *e)
 {
     mw_rd r = {p, n, 0};
     memset(e, 0, sizeof *e);
-    if (rd_u8(&r) != 0xFF)
+    if (mw_rd_u8(&r) != 0xFF)
         return -1;
-    e->code = rd_le16(&r);
+    e->code = mw_rd_le16(&r);
     if (r.bad)
         return -1;
     /* Errors sent before the handshake completes carry no SQLSTATE. */
     if (r.n >= 6 && r.p[0] == '#') {
         copy_str(e->sqlstate, sizeof e->sqlstate, r.p + 1, 5);
-        rd_bytes(&r, 6);
+        mw_rd_bytes(&r, 6);
     } else {
         memcpy(e->sqlstate, "HY000", 6);
     }
@@ -247,16 +247,16 @@ int mw_parse_coldef(const uint8_t *p, size_t n, mw_coldef *c)
     int i;
     memset(c, 0, sizeof *c);
     for (i = 0; i < 4; i++) /* catalog, schema, table, org_table */
-        rd_lenenc_str(&r, &len);
-    name = rd_lenenc_str(&r, &len);
+        mw_rd_lenenc_str(&r, &len);
+    name = mw_rd_lenenc_str(&r, &len);
     copy_str(c->name, sizeof c->name, name, len);
-    rd_lenenc_str(&r, &len); /* org_name */
-    rd_lenenc(&r, NULL);     /* length of the fixed fields, 0x0c */
-    c->charset = rd_le16(&r);
-    c->length = rd_le32(&r);
-    c->type = rd_u8(&r);
-    c->flags = rd_le16(&r);
-    c->decimals = rd_u8(&r);
+    mw_rd_lenenc_str(&r, &len); /* org_name */
+    mw_rd_lenenc(&r, NULL);     /* length of the fixed fields, 0x0c */
+    c->charset = mw_rd_le16(&r);
+    c->length = mw_rd_le32(&r);
+    c->type = mw_rd_u8(&r);
+    c->flags = mw_rd_le16(&r);
+    c->decimals = mw_rd_u8(&r);
     return r.bad ? -1 : 0;
 }
 

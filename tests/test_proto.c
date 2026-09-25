@@ -30,23 +30,23 @@ static void test_lenenc(void)
         mw_buf b = {0};
         mw_rd r;
         int is_null;
-        buf_lenenc(&b, v[i]);
+        mw_buf_lenenc(&b, v[i]);
         CHECK(b.n == size[i]);
         r.p = b.p;
         r.n = b.n;
         r.bad = 0;
-        CHECK(rd_lenenc(&r, &is_null) == v[i]);
+        CHECK(mw_rd_lenenc(&r, &is_null) == v[i]);
         CHECK(!is_null && !r.bad && r.n == 0);
-        buf_free(&b);
+        mw_buf_free(&b);
     }
     {
         static const uint8_t null_marker[] = {0xFB}, truncated[] = {0xFC, 0x01};
         mw_rd r = {null_marker, 1, 0};
         size_t len = 99;
-        CHECK(rd_lenenc_str(&r, &len) == NULL && !r.bad && len == 0);
+        CHECK(mw_rd_lenenc_str(&r, &len) == NULL && !r.bad && len == 0);
         r.p = truncated;
         r.n = 2;
-        rd_lenenc(&r, NULL);
+        mw_rd_lenenc(&r, NULL);
         CHECK(r.bad);
     }
     {
@@ -54,7 +54,7 @@ static void test_lenenc(void)
         static const uint8_t lying[] = {0x05, 'a', 'b'};
         mw_rd r = {lying, 3, 0};
         size_t len;
-        CHECK(rd_lenenc_str(&r, &len) == NULL && r.bad);
+        CHECK(mw_rd_lenenc_str(&r, &len) == NULL && r.bad);
     }
 }
 
@@ -140,21 +140,21 @@ static void test_coldef(void)
     static const char *const s[] = {"def", "testdb", "t", "t", "nombre", "nombre"};
     size_t i;
     for (i = 0; i < 6; i++) {
-        buf_lenenc(&b, strlen(s[i]));
-        buf_put(&b, s[i], strlen(s[i]));
+        mw_buf_lenenc(&b, strlen(s[i]));
+        mw_buf_put(&b, s[i], strlen(s[i]));
     }
-    buf_lenenc(&b, 0x0c);
-    buf_put(&b, "\x2d\x00", 2);          /* utf8mb4_general_ci */
-    buf_le32(&b, 400);
-    buf_u8(&b, 253);                     /* VAR_STRING */
-    buf_put(&b, "\x01\x00", 2);          /* NOT NULL */
-    buf_u8(&b, 0);
-    buf_put(&b, "\x00\x00", 2);
+    mw_buf_lenenc(&b, 0x0c);
+    mw_buf_put(&b, "\x2d\x00", 2);          /* utf8mb4_general_ci */
+    mw_buf_le32(&b, 400);
+    mw_buf_u8(&b, 253);                     /* VAR_STRING */
+    mw_buf_put(&b, "\x01\x00", 2);          /* NOT NULL */
+    mw_buf_u8(&b, 0);
+    mw_buf_put(&b, "\x00\x00", 2);
     CHECK(mw_parse_coldef(b.p, b.n, &d) == 0);
     CHECK(!strcmp(d.name, "nombre") && d.charset == 45 && d.length == 400);
     CHECK(d.type == 253 && d.flags == 1 && d.decimals == 0);
     CHECK(mw_parse_coldef(b.p, b.n - 8, &d) < 0);
-    buf_free(&b);
+    mw_buf_free(&b);
 }
 
 static void test_scrambles(void)

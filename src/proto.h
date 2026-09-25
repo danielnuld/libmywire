@@ -40,11 +40,11 @@ typedef struct {
     int oom;
 } mw_buf;
 
-void buf_put(mw_buf *b, const void *p, size_t n);
-void buf_u8(mw_buf *b, unsigned v);
-void buf_le32(mw_buf *b, uint32_t v);
-void buf_lenenc(mw_buf *b, uint64_t v);
-void buf_free(mw_buf *b);
+void mw_buf_put(mw_buf *b, const void *p, size_t n);
+void mw_buf_u8(mw_buf *b, unsigned v);
+void mw_buf_le32(mw_buf *b, uint32_t v);
+void mw_buf_lenenc(mw_buf *b, uint64_t v);
+void mw_buf_free(mw_buf *b);
 
 /* A read cursor. Reading past the end sets bad and yields zeros. */
 typedef struct {
@@ -53,17 +53,17 @@ typedef struct {
     int bad;
 } mw_rd;
 
-unsigned rd_u8(mw_rd *r);
-unsigned rd_le16(mw_rd *r);
-uint32_t rd_le32(mw_rd *r);
+unsigned mw_rd_u8(mw_rd *r);
+unsigned mw_rd_le16(mw_rd *r);
+uint32_t mw_rd_le32(mw_rd *r);
 /* A length-encoded integer; *is_null (if given) = 1 for the 0xFB marker. */
-uint64_t rd_lenenc(mw_rd *r, int *is_null);
+uint64_t mw_rd_lenenc(mw_rd *r, int *is_null);
 /* n bytes, or NULL (and bad) if fewer remain. */
-const uint8_t *rd_bytes(mw_rd *r, size_t n);
+const uint8_t *mw_rd_bytes(mw_rd *r, size_t n);
 /* A length-encoded string; returns NULL for the NULL marker. */
-const uint8_t *rd_lenenc_str(mw_rd *r, size_t *len);
+const uint8_t *mw_rd_lenenc_str(mw_rd *r, size_t *len);
 /* A NUL-terminated string into out (truncated to cap-1); 0 if unterminated. */
-int rd_cstr(mw_rd *r, char *out, size_t cap);
+int mw_rd_cstr(mw_rd *r, char *out, size_t cap);
 
 typedef struct {
     unsigned protocol;
