@@ -455,7 +455,7 @@ static int login(mw_conn *c, const mw_handshake *h, uint32_t caps, const mw_opti
     }
 }
 
-static char *dup(const char *s)
+static char *str_dup(const char *s)
 {
     char *d;
     if (!s)
@@ -497,13 +497,13 @@ mw_conn *mw_connect(const mw_options *o, char *err, int errlen)
     WSAStartup(MAKEWORD(2, 2), &wsa);
 #endif
     c->o = *o;
-    c->o.host = dup(o->host ? o->host : "localhost");
-    c->o.user = dup(o->user ? o->user : "");
-    c->o.password = dup(o->password);
-    c->o.database = o->database && *o->database ? dup(o->database) : NULL;
-    c->o.ca_file = dup(o->ca_file);
-    c->o.cert_file = dup(o->cert_file);
-    c->o.key_file = dup(o->key_file);
+    c->o.host = str_dup(o->host ? o->host : "localhost");
+    c->o.user = str_dup(o->user ? o->user : "");
+    c->o.password = str_dup(o->password);
+    c->o.database = o->database && *o->database ? str_dup(o->database) : NULL;
+    c->o.ca_file = str_dup(o->ca_file);
+    c->o.cert_file = str_dup(o->cert_file);
+    c->o.key_file = str_dup(o->key_file);
     o = &c->o;
     if (!o->host || !o->user) {
         fail(c, "out of memory");
@@ -680,10 +680,10 @@ static int read_head(mw_conn *c, mw_result *r)
         if (rd.bad || n == 0 || n > 4096)
             return lose(c, "unreadable result header");
         r->ncols = (int)n;
-        r->defs = (mw_coldef *)calloc(n, sizeof *r->defs);
-        r->cols = (mw_column *)calloc(n, sizeof *r->cols);
-        r->off = (size_t *)calloc(n, sizeof *r->off);
-        r->len = (size_t *)calloc(n, sizeof *r->len);
+        r->defs = (mw_coldef *)calloc((size_t)n, sizeof *r->defs);
+        r->cols = (mw_column *)calloc((size_t)n, sizeof *r->cols);
+        r->off = (size_t *)calloc((size_t)n, sizeof *r->off);
+        r->len = (size_t *)calloc((size_t)n, sizeof *r->len);
         if (!r->defs || !r->cols || !r->off || !r->len)
             return lose(c, "out of memory");
         for (i = 0; i < r->ncols; i++) {
