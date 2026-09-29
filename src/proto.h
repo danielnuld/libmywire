@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 /* The MySQL/MariaDB client/server protocol's pure parts: byte buffers, the
  * integer and string encodings, the packets the client parses, and the
  * password scrambles. No sockets here, so every function is unit tested.

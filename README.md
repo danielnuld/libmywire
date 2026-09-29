@@ -1,7 +1,7 @@
 # libmywire
 
 A small client for the MySQL and MariaDB client/server protocol, in C11, under
-the Apache License 2.0. It exists so [Squaero](https://github.com/danielnuld/squaero)
+the Mozilla Public License 2.0. It exists so [Squaero](https://github.com/danielnuld/squaero)
 can speak MySQL where the LGPL clients cannot go (the iPhone App Store).
 
 It is written **only from the public protocol documentation** — the
@@ -60,3 +60,8 @@ ctest --test-dir build --output-on-failure
 `test_live` runs against a server when `MW_TEST_HOST` is set (see the comment at
 the top of `tests/test_live.c` for the other variables); CI runs it against
 MySQL 8.4 and MariaDB 11 under AddressSanitizer and UBSan.
+
+## License
+
+MPL-2.0 (Mozilla Public License 2.0). Versions up to and including v0.1.1 were
+released under Apache-2.0 and remain available under it.

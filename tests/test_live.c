@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 /* Live tests against a MySQL or MariaDB server. Skipped (exit 77) unless
  * MW_TEST_HOST is set. Also reads:
  *   MW_TEST_PORT, MW_TEST_USER, MW_TEST_PASSWORD, MW_TEST_DB
